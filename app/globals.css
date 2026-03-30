@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --font-headline: var(--font-manrope), ui-sans-serif, system-ui;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui;
+
+  --color-primary: #006a5b;
+  --color-primary-container: #008573;
+  --color-secondary: #7d5700;
+  --color-secondary-container: #ffc55f;
+  --color-tertiary: #ba112c;
+  --color-background: #f8fafa;
+  --color-surface: #f8fafa;
+  --color-surface-container-low: #f2f4f4;
+  --color-surface-container-high: #eceeee;
+  --color-surface-container-highest: #e1e3e3;
+  --color-on-surface: #191c1d;
+  --color-on-surface-variant: #3e4946;
+  --color-outline-variant: #bdc9c5;
+
+  /* Overriding default colors with hex to avoid oklch/oklab issues in html2canvas */
+  --color-yellow-300: #fde047;
+  --color-slate-50: #f8fafc;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-body;
+  }
+}
+
+.memo-preview-glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Custom scrollbar for a cleaner look */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-outline-variant/30 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-outline-variant/50;
+}
