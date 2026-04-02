@@ -269,10 +269,10 @@ export default function ITMemoGenerator() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
 
   useEffect(() => {
     // Load history
@@ -514,42 +514,52 @@ export default function ITMemoGenerator() {
     setActiveTemplate(null);
   };
 
+  const dataRef = useRef(data);
+  const autoTranslateRef = useRef(autoTranslate);
+  const isTranslatingRef = useRef(isTranslating);
+
+  useEffect(() => { dataRef.current = data; }, [data]);
+  useEffect(() => { autoTranslateRef.current = autoTranslate; }, [autoTranslate]);
+  useEffect(() => { isTranslatingRef.current = isTranslating; }, [isTranslating]);
+
   const handleGenerateTranslations = useCallback(async (retryCount = 0, force = false) => {
-    if (data.windows.every(w => w.systems.length === 0)) return;
-    if (!autoTranslate && !force) return;
+    const currentData = dataRef.current;
+    if (currentData.windows.every(w => w.systems.length === 0)) return;
+    if (!autoTranslateRef.current && !force) return;
     
     // Create a unique key for the current content to avoid redundant calls
     const currentDataKey = JSON.stringify({
-      windows: data.windows,
-      customIntro: data.customIntro || INITIAL_DATA.customIntro,
-      customTitlePt: data.customTitlePt || INITIAL_DATA.customTitlePt,
-      customPrompt: data.settings.customPrompt,
-      openaiApiKey: data.settings.openaiApiKey
+      windows: currentData.windows,
+      customIntro: currentData.customIntro || INITIAL_DATA.customIntro,
+      customTitlePt: currentData.customTitlePt || INITIAL_DATA.customTitlePt,
+      customPrompt: currentData.settings.customPrompt,
+      openaiApiKey: currentData.settings.openaiApiKey
     });
     
     if (currentDataKey === lastTranslatedDataRef.current && !force) return;
-    if (isTranslating && retryCount === 0) return;
+    if (isTranslatingRef.current && retryCount === 0) return;
     
     const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    const openaiKey = data.settings.openaiApiKey;
+    const openaiKey = currentData.settings.openaiApiKey;
     
     if (!geminiKey && !openaiKey) {
       console.warn("AI API key is missing. Translation skipped.");
+      if (force) showToast("Chave de API não configurada. Verifique as configurações.", "error");
       return;
     }
 
     setIsTranslating(true);
     try {
       const prompt = `
-        ${data.settings.customPrompt || DEFAULT_PROMPT}
+        ${currentData.settings.customPrompt || DEFAULT_PROMPT}
 
         Data to translate:
-        Title: "${data.customTitlePt || INITIAL_DATA.customTitlePt}"
-        Intro: "${data.customIntro || INITIAL_DATA.customIntro}"
+        Title: "${currentData.customTitlePt || INITIAL_DATA.customTitlePt}"
+        Intro: "${currentData.customIntro || INITIAL_DATA.customIntro}"
         Warning: "Durante este período, os serviços listados poderão apresentar instabilidade. Recomendamos salvar todos os trabalhos antes do início."
         
         Maintenance Windows:
-        ${data.windows.map((w, i) => `
+        ${currentData.windows.map((w, i) => `
         Window ${i + 1}:
         Systems: ${(w.systems || []).join('/')}
         Start Date: ${w.startDate}
@@ -628,15 +638,19 @@ export default function ITMemoGenerator() {
       }
 
       if (responseText) {
-        const result = JSON.parse(responseText.trim());
+        // Clean up response text in case of markdown wrappers
+        const cleanedText = responseText.replace(/```json\n?|\n?```/g, '').trim();
+        const result = JSON.parse(cleanedText);
         setTranslations(result);
         lastTranslatedDataRef.current = currentDataKey;
+        if (force) showToast("Tradução concluída com sucesso!");
       }
     } catch (error: any) {
       console.error("Translation failed:", error);
       
-      // Handle rate limit error (429) with exponential backoff
       const errorMsg = error?.message || String(error);
+      
+      // Handle rate limit error (429) with exponential backoff
       if (errorMsg.includes('429') || error?.status === 'RESOURCE_EXHAUSTED') {
         if (retryCount < 3) {
           const delay = Math.pow(2, retryCount) * 2000; // 2s, 4s, 8s
@@ -644,13 +658,16 @@ export default function ITMemoGenerator() {
           setTimeout(() => handleGenerateTranslations(retryCount + 1), delay);
           return; // Don't set isTranslating to false yet
         }
+        showToast("Limite de requisições atingido. Tente novamente em instantes.", "error");
+      } else {
+        showToast("Falha na tradução. Verifique sua conexão e chaves de API.", "error");
       }
     } finally {
       if (retryCount === 0 || retryCount >= 3) {
         setIsTranslating(false);
       }
     }
-  }, [data.windows, data.customIntro, data.customTitlePt, data.settings.customPrompt, data.settings.openaiApiKey, isTranslating, autoTranslate]);
+  }, [showToast]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
